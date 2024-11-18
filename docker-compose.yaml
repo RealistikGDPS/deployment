@@ -1,0 +1,84 @@
+version: "3"
+services:
+  mysql:
+    image: mysql
+    env_file:
+      - ./configuration/mysql.env
+    volumes:
+      - ${MYSQL_DIRECTORY}:/var/lib/mysql
+    restart: always
+    healthcheck:
+      test: "/usr/bin/mysql --user=$$MYSQL_USER --password=$$MYSQL_PASSWORD --execute \"SELECT 1;\""
+      interval: 2s
+      timeout: 20s
+      retries: 10
+
+  redis:
+    logging:
+      driver: none
+    image: redis
+    env_file:
+      - ./configuration/redis.env
+    restart: always
+    # command: "redis-server --port ${REDIS_PORT}"
+    volumes:
+      - ${REDIS_DIRECTORY}:/data
+    healthcheck:
+      test: "redis-cli -p ${REDIS_PORT} ping"
+      interval: 2s
+      timeout: 20s
+      retries: 10
+
+  ognisko:
+    image: ognisko:latest
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    restart: always
+    # Inject config specific variables.
+    environment:
+      - OGNISKO_HTTP_HOST=0.0.0.0
+      - OGNISKO_HTTP_PORT=80
+
+      - MYSQL_HOST=mysql
+      - MYSQL_TCP_PORT=3306
+
+      - REDIS_HOST=redis
+      - REDIS_TCP_PORT=6379
+
+      - MEILI_HOST=meilisearch
+      - MEILI_PORT=80
+    env_file:
+      - ./configuration/redis.env
+      - ./configuration/mysql.env
+      - ./configuration/ognisko.env
+      - ./configuration/meili.env
+    volumes:
+      - ${OGNISKO_DIRECTORY}:/data
+
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.3.1
+    restart: always
+    volumes:
+      - ${MEILI_DIRECTORY}:/meili_data
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_KEY}
+      - MEILI_HTTP_ADDR=0.0.0.0:80
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    ports:
+      - "${PHPMYADMIN_PORT}:80"
+    environment:
+      - PMA_HOST=mysql
+      - PMA_PORT=3306
+    env_file:
+      - ./configuration/phpmyadmin.env
+    depends_on:
+      mysql:
+        condition: service_healthy
