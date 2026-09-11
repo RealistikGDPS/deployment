@@ -4,10 +4,11 @@ Runs a Poltergeist server on one Linux host with Docker Compose.
 
 ## Components
 
-- **nginx** - the only container with a published port. Sends `/panel` to the panel and everything else to the app, with `GAME_PATH` rewritten to the app's `/database`.
+- **nginx** - the only container with a published port. Sends `/panel` to the panel, `/migrate` to the migrate page and everything else to the app, with `GAME_PATH` rewritten to the app's `/database`.
 - **app** - the game server, `ghcr.io/realistikgdps/poltergeist`.
 - **panel** - the admin panel, `ghcr.io/realistikgdps/poltergeist-panel`.
-- **migrations** - applies the SQL in `migrations/` and exits. The app and panel wait for it. Built locally.
+- **migrate** - the public page that moves accounts imported from a 2.1 server onto 2.2, `ghcr.io/realistikgdps/poltergeist-migrate`.
+- **migrations** - applies the SQL in `migrations/` and exits. The app, panel and migrate page wait for it. Built locally.
 - **mysql** and **redis** - on an internal network with no access from outside the stack.
 
 Cloudflare is expected in front, terminating TLS and connecting to `HTTP_PORT` over HTTP.
@@ -16,7 +17,7 @@ Cloudflare is expected in front, terminating TLS and connecting to `HTTP_PORT` o
 
 ```
 compose.yaml        the stack
-compose.dev.yaml    builds the app and panel from ../poltergeist and ../poltergeist-panel
+compose.dev.yaml    builds the app, panel and migrate page from the sibling checkouts
 .env.example        ports, image tags, paths, memory limits
 configuration/      app.env, mysql.env, mysql-root.env
 nginx/              router template and Cloudflare IP ranges
@@ -44,13 +45,13 @@ make deploy
 ```
 make deploy               pull images, build migrations, start or update the stack
 make ps                   container status
-make logs                 follow app, panel and nginx logs
+make logs                 follow app, panel, migrate and nginx logs
 make migrate              run pending migrations by hand
 make rebuild-leaderboards recompute the Redis rankings from MySQL
 make backup               dump MySQL and archive object storage
 make cloudflare-ips       refresh nginx/cloudflare.conf
 make down                 stop the stack
-make dev                  run with local builds of the app and panel
+make dev                  run with local builds of the app, panel and migrate page
 ```
 
 To update, change the tags in `.env` and run `make deploy`. To roll back, put the old tags back and run it again.
@@ -58,7 +59,7 @@ To update, change the tags in `.env` and run `make deploy`. To roll back, put th
 ## Cloudflare
 
 - Add a WAF skip rule for `/database/*`. The game client sends no User-Agent and gets blocked otherwise.
-- Bypass the cache for `/database/*`, `/api/*` and `/panel/*`.
+- Bypass the cache for `/database/*`, `/api/*`, `/panel/*` and `/migrate/*`.
 - Firewall `HTTP_PORT` to Cloudflare's IP ranges so the origin cannot be reached directly.
 
 ## Backups

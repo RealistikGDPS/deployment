@@ -1,5 +1,5 @@
-# Routes the public port: the control room lives under /panel, the game
-# server takes everything else.
+# Routes the public port: the control room lives under /panel, the account
+# migration page under /migrate, and the game server takes everything else.
 #
 # Rendered by the nginx image's envsubst; ${NGINX_RESOLVER} and
 # ${NGINX_GAME_PATH} are replaced.
@@ -9,7 +9,7 @@ include /etc/nginx/cloudflare.conf;
 real_ip_recursive on;
 
 # Upstreams resolve through the embedded DNS and are re-resolved as
-# containers restart, so either app may be down without taking nginx down.
+# containers restart, so any app may be down without taking nginx down.
 resolver ${NGINX_RESOLVER} valid=10s;
 
 upstream app {
@@ -21,6 +21,12 @@ upstream app {
 upstream panel {
     zone panel 64k;
     server panel:8501 resolve;
+    keepalive 8;
+}
+
+upstream migrate {
+    zone migrate 64k;
+    server migrate:8502 resolve;
     keepalive 8;
 }
 
@@ -64,6 +70,20 @@ server {
 
     location = /panel {
         return 302 /panel/;
+    }
+
+    location /migrate/ {
+        proxy_pass http://migrate;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+        add_header X-Frame-Options SAMEORIGIN always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy same-origin always;
+    }
+
+    location = /migrate {
+        return 302 /migrate/;
     }
 
     location /api/v1/ {

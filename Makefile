@@ -22,20 +22,20 @@ down:
 	$(COMPOSE) down
 
 # Pull the tags pinned in .env, build the migrations image and roll the stack.
-# Migrations run before the app and panel come up; a failed migration leaves
+# Migrations run before the app, panel and migrate page come up; a failed migration leaves
 # the old containers stopped.
 deploy:
 	$(COMPOSE) pull --ignore-buildable
 	$(COMPOSE) up -d --build --remove-orphans
 
 restart:
-	$(COMPOSE) restart app panel
+	$(COMPOSE) restart app panel migrate
 
 ps:
 	$(COMPOSE) ps
 
 logs:
-	$(COMPOSE) logs -f --tail=200 app panel nginx
+	$(COMPOSE) logs -f --tail=200 app panel migrate nginx
 
 migrate:
 	$(COMPOSE) run --rm --build migrations

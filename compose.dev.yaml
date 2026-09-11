@@ -31,6 +31,14 @@ services:
       - ../poltergeist-panel/panel:/app/panel:z
       - ${DATA_PATH:-./volumes}/storage:/data/storage:z
 
+  migrate:
+    <<: *dev-user
+    image: poltergeist-migrate:dev
+    build:
+      context: ../poltergeist-migrate
+    volumes:
+      - ../poltergeist-migrate/migrate:/app/migrate:z
+
   migrations:
     <<: *dev-user
 
