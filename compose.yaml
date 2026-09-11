@@ -51,6 +51,7 @@ services:
     environment:
       # Docker's embedded DNS. Podman uses a different address; set it in .env.
       NGINX_RESOLVER: ${NGINX_RESOLVER:-127.0.0.11}
+      NGINX_GAME_PATH: ${GAME_PATH:-/database}
     tmpfs:
       # Client bodies and proxy buffers; the rendered configuration. Both are
       # explicitly world-writable so the unprivileged nginx user can use them

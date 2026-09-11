@@ -1,7 +1,8 @@
 # Routes the public port: the control room lives under /panel, the game
 # server takes everything else.
 #
-# Rendered by the nginx image's envsubst; only ${NGINX_RESOLVER} is replaced.
+# Rendered by the nginx image's envsubst; ${NGINX_RESOLVER} and
+# ${NGINX_GAME_PATH} are replaced.
 # Everything here lands inside the http {} block of the image's nginx.conf.
 
 include /etc/nginx/cloudflare.conf;
@@ -71,10 +72,14 @@ server {
         proxy_set_header Connection "";
     }
 
-    # Game endpoints. Level uploads and account saves are large; streaming
-    # them straight to the app avoids buffering each body to disk first.
-    location /database/ {
+    # Game endpoints. The app serves them under /database, which the client
+    # also appends to the URL returned by getAccountURL; NGINX_GAME_PATH is
+    # the base path patched into the client and is rewritten onto /database.
+    # Level uploads and account saves are large; streaming them straight to
+    # the app avoids buffering each body to disk first.
+    location ~ ^(?:/database|${NGINX_GAME_PATH})/(?<endpoint>.*)$ {
         limit_req zone=game burst=60 nodelay;
+        rewrite ^ /database/$endpoint break;
         proxy_pass http://app;
         proxy_set_header Connection "";
         proxy_request_buffering off;

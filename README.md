@@ -4,7 +4,7 @@ Runs a Poltergeist server on one Linux host with Docker Compose.
 
 ## Components
 
-- **nginx** - the only container with a published port. Sends `/panel` to the panel and everything else to the app.
+- **nginx** - the only container with a published port. Sends `/panel` to the panel and everything else to the app, with `GAME_PATH` rewritten to the app's `/database`.
 - **app** - the game server, `ghcr.io/realistikgdps/poltergeist`.
 - **panel** - the admin panel, `ghcr.io/realistikgdps/poltergeist-panel`.
 - **migrations** - applies the SQL in `migrations/` and exits. The app and panel wait for it. Built locally.
@@ -33,7 +33,7 @@ cd ~/poltergeist
 make setup      # creates .env and configuration/*.env from the examples
 ```
 
-Edit `.env` (image tags, `DATA_PATH`) and `configuration/*.env` (public URL, admin API key, database passwords), then:
+Edit `.env` (image tags, `GAME_PATH`, `DATA_PATH`) and `configuration/*.env` (public URL, admin API key, database passwords), then:
 
 ```bash
 make deploy
