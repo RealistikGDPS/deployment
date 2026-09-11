@@ -195,8 +195,11 @@ services:
       - ${DATA_PATH:-./volumes}/mysql:/var/lib/mysql
     networks:
       - data
+    # Pings over TCP on purpose: the image's first-run initialisation runs a
+    # temporary server that answers on the socket but has networking off, so
+    # a socket ping would report healthy before the real server is up.
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u\"$$MYSQL_USER\" -p\"$$MYSQL_PASSWORD\" --silent"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u\"$$MYSQL_USER\" -p\"$$MYSQL_PASSWORD\" --silent"]
       interval: 10s
       timeout: 5s
       start_period: 30s
