@@ -1,0 +1,90 @@
+# Routes the public port: the control room lives under /panel, the game
+# server takes everything else.
+#
+# Rendered by the nginx image's envsubst; only ${NGINX_RESOLVER} is replaced.
+# Everything here lands inside the http {} block of the image's nginx.conf.
+
+include /etc/nginx/cloudflare.conf;
+real_ip_recursive on;
+
+# Upstreams resolve through the embedded DNS and are re-resolved as
+# containers restart, so either app may be down without taking nginx down.
+resolver ${NGINX_RESOLVER} valid=10s;
+
+upstream app {
+    zone app 64k;
+    server app:8000 resolve;
+    keepalive 32;
+}
+
+upstream panel {
+    zone panel 64k;
+    server panel:8501 resolve;
+    keepalive 8;
+}
+
+# Flood caps keyed on the real client address. The application applies its
+# own per-endpoint limits; these only stop one address saturating a worker.
+limit_req_zone $binary_remote_addr zone=game:10m rate=30r/s;
+limit_req_zone $binary_remote_addr zone=admin:1m rate=5r/s;
+limit_conn_zone $binary_remote_addr zone=perip:10m;
+limit_req_status 429;
+limit_conn_status 429;
+
+server_tokens off;
+
+gzip on;
+gzip_vary on;
+gzip_min_length 1024;
+gzip_types text/plain text/css application/json application/javascript text/javascript application/xml;
+
+server {
+    listen 8080;
+    server_name _;
+    client_max_body_size 128m;
+    absolute_redirect off;
+    limit_conn perip 64;
+
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    location /panel/ {
+        proxy_pass http://panel;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+        add_header X-Frame-Options SAMEORIGIN always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy same-origin always;
+    }
+
+    location = /panel {
+        return 302 /panel/;
+    }
+
+    location /api/v1/ {
+        limit_req zone=admin burst=10 nodelay;
+        proxy_pass http://app;
+        proxy_set_header Connection "";
+    }
+
+    # Game endpoints. Level uploads and account saves are large; streaming
+    # them straight to the app avoids buffering each body to disk first.
+    location /database/ {
+        limit_req zone=game burst=60 nodelay;
+        proxy_pass http://app;
+        proxy_set_header Connection "";
+        proxy_request_buffering off;
+        proxy_read_timeout 120s;
+    }
+
+    location / {
+        limit_req zone=game burst=60 nodelay;
+        proxy_pass http://app;
+        proxy_set_header Connection "";
+        proxy_read_timeout 60s;
+    }
+}

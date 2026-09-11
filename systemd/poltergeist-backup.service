@@ -1,0 +1,9 @@
+[Unit]
+Description=Poltergeist nightly backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/poltergeist
+ExecStart=%h/poltergeist/scripts/backup.sh

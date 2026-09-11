@@ -1,0 +1,55 @@
+# Local development on top of compose.yaml:
+#   docker compose -f compose.yaml -f compose.dev.yaml up
+# Builds the images from the sibling checkouts, reloads the app on edit and
+# exposes MySQL and Redis on localhost. Bind mounts carry :z for SELinux hosts.
+#
+# `userns_mode: keep-id` is Podman-specific: it maps the host user to the same
+# uid inside the container so APP_UID can write the bind-mounted source and
+# storage. Docker maps uids one to one and does not need it.
+
+x-dev-user: &dev-user
+  userns_mode: keep-id
+
+services:
+  app:
+    <<: *dev-user
+    image: poltergeist:dev
+    build:
+      context: ../poltergeist
+    environment:
+      APP_DEV_MODE: "true"
+    volumes:
+      - ../poltergeist/app:/app/app:z
+      - ${DATA_PATH:-./volumes}/storage:/data/storage:z
+
+  panel:
+    <<: *dev-user
+    image: poltergeist-panel:dev
+    build:
+      context: ../poltergeist-panel
+    volumes:
+      - ../poltergeist-panel/panel:/app/panel:z
+      - ${DATA_PATH:-./volumes}/storage:/data/storage:z
+
+  migrations:
+    <<: *dev-user
+
+  rebuild-leaderboards:
+    <<: *dev-user
+    image: poltergeist:dev
+    build:
+      context: ../poltergeist
+    volumes:
+      - ${DATA_PATH:-./volumes}/storage:/data/storage:z
+
+  mysql:
+    ports:
+      - "127.0.0.1:${MYSQL_DEV_PORT:-3306}:3306"
+    volumes:
+      - ${DATA_PATH:-./volumes}/mysql:/var/lib/mysql:z
+
+  redis:
+    ports:
+      - "127.0.0.1:${REDIS_DEV_PORT:-6379}:6379"
+    volumes:
+      - ${DATA_PATH:-./volumes}/redis:/data:z
