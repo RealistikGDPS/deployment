@@ -18,10 +18,11 @@ compose="${COMPOSE:-docker compose}"
 mkdir -p "$backup_path"
 
 # Written under a temporary name so a failed dump never leaves a truncated
-# archive that looks like a good backup.
+# archive that looks like a good backup. Dumps as root, which only the MySQL
+# container knows: a consistent snapshot needs the RELOAD privilege.
 echo "Dumping MySQL."
 $compose exec -T mysql sh -c \
-    'mysqldump --single-transaction --no-tablespaces --quick --routines --triggers -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+    'mysqldump --single-transaction --quick --routines --triggers --set-gtid-purged=OFF -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
     | gzip > "${backup_path}/mysql-${stamp}.sql.gz.partial"
 mv "${backup_path}/mysql-${stamp}.sql.gz.partial" "${backup_path}/mysql-${stamp}.sql.gz"
 
