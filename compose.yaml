@@ -63,6 +63,7 @@ services:
       - ./nginx/templates:/etc/nginx/templates:ro
       - ./nginx/cloudflare.conf:/etc/nginx/cloudflare.conf:ro
       - ${DATA_PATH:-./volumes}/storage/songs:/srv/songs:ro
+      - ${DATA_PATH:-./volumes}/files:/srv/files:ro
     networks:
       - proxy
     deploy:

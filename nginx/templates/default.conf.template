@@ -1,7 +1,7 @@
 # Routes the public port: the control room lives under /panel, custom songs
-# are served from object storage under /songs, the game server takes
-# /database (and the patched game path) plus /api, and the website takes
-# everything else.
+# are served from object storage under /songs, client downloads from /files,
+# the game server takes /database (and the patched game path) plus /api, and
+# the website takes everything else.
 #
 # Rendered by the nginx image's envsubst; ${NGINX_RESOLVER} and
 # ${NGINX_GAME_PATH} are replaced.
@@ -84,6 +84,16 @@ server {
         types { audio/mpeg mp3; }
         default_type application/octet-stream;
         add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    # Client builds the download page links to. Large, rarely changed and
+    # named per version, so they may be cached for a day.
+    location /files/ {
+        alias /srv/files/;
+        types { application/zip zip; application/vnd.android.package-archive apk; }
+        default_type application/octet-stream;
+        add_header Cache-Control "public, max-age=86400";
         add_header X-Content-Type-Options nosniff always;
     }
 

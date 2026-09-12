@@ -4,7 +4,7 @@ Runs a Poltergeist server on one Linux host with Docker Compose.
 
 ## Components
 
-- **nginx** - the only container with a published port. Sends `/panel` to the panel, `/database`, `GAME_PATH` and `/api` to the app (with `GAME_PATH` rewritten to the app's `/database`), `/songs` to object storage, and everything else to the website.
+- **nginx** - the only container with a published port. Sends `/panel` to the panel, `/database`, `GAME_PATH` and `/api` to the app (with `GAME_PATH` rewritten to the app's `/database`), `/songs` to object storage, `/files` to the client builds in `DATA_PATH/files`, and everything else to the website.
 - **app** - the game server, `ghcr.io/realistikgdps/poltergeist`.
 - **panel** - the admin panel, `ghcr.io/realistikgdps/poltergeist-panel`.
 - **web** - the public website (downloads, leaderboards, profiles, accounts), `ghcr.io/realistikgdps/rgdps-web`. It needs the game's icon sprites in `DATA_PATH/assets`; see its README.

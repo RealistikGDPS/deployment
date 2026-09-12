@@ -10,7 +10,7 @@ setup:
 	@test -f configuration/mysql.env || cp configuration/mysql.env.example configuration/mysql.env
 	@test -f configuration/mysql-root.env || cp configuration/mysql-root.env.example configuration/mysql-root.env
 	@test -f configuration/web.env || cp configuration/web.env.example configuration/web.env
-	@mkdir -p "$$(sed -n 's/^DATA_PATH=//p' .env)/storage/songs" "$$(sed -n 's/^DATA_PATH=//p' .env)/assets"
+	@mkdir -p "$$(sed -n 's/^DATA_PATH=//p' .env)/storage/songs" "$$(sed -n 's/^DATA_PATH=//p' .env)/assets" "$$(sed -n 's/^DATA_PATH=//p' .env)/files"
 	@echo "Edit .env and configuration/*.env, then run: make deploy"
 
 config:
