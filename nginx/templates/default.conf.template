@@ -1,5 +1,6 @@
 # Routes the public port: the control room lives under /panel, the account
-# migration page under /migrate, and the game server takes everything else.
+# migration page under /migrate, custom songs are served from object storage
+# under /songs, and the game server takes everything else.
 #
 # Rendered by the nginx image's envsubst; ${NGINX_RESOLVER} and
 # ${NGINX_GAME_PATH} are replaced.
@@ -84,6 +85,18 @@ server {
 
     location = /migrate {
         return 302 /migrate/;
+    }
+
+    # Custom songs are files in object storage under songs/<id>.mp3 and the
+    # songs table points here. They never change under one id, so clients
+    # and Cloudflare may cache them for as long as they like. Range requests
+    # let the client resume a download.
+    location /songs/ {
+        alias /srv/songs/;
+        types { audio/mpeg mp3; }
+        default_type application/octet-stream;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Content-Type-Options nosniff always;
     }
 
     location /api/v1/ {

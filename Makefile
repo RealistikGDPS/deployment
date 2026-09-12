@@ -9,7 +9,7 @@ setup:
 	@test -f configuration/app.env || cp configuration/app.env.example configuration/app.env
 	@test -f configuration/mysql.env || cp configuration/mysql.env.example configuration/mysql.env
 	@test -f configuration/mysql-root.env || cp configuration/mysql-root.env.example configuration/mysql-root.env
-	@mkdir -p "$$(sed -n 's/^DATA_PATH=//p' .env)/storage"
+	@mkdir -p "$$(sed -n 's/^DATA_PATH=//p' .env)/storage/songs"
 	@echo "Edit .env and configuration/*.env, then run: make deploy"
 
 config:
