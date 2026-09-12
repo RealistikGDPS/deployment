@@ -1,10 +1,10 @@
-# Poltergeist production stack. The app, panel and migrate images come from
-# GHCR; only the migrations image is built here. `compose.dev.yaml` builds the
-# rest too.
+# Poltergeist production stack. The app, panel and web images come from GHCR;
+# only the migrations image is built here. `compose.dev.yaml` builds the rest
+# too.
 #
-# Only nginx publishes a port. The app, panel and migrate page are reached
-# through it on the `proxy` network; MySQL and Redis sit on the `data` network, which is internal
-# and therefore has no route to the host or the internet.
+# Only nginx publishes a port. The app, panel and website are reached through
+# it on the `proxy` network; MySQL and Redis sit on the `data` network, which
+# is internal and therefore has no route to the host or the internet.
 
 x-logging: &logging
   driver: json-file
@@ -137,21 +137,29 @@ services:
           memory: ${PANEL_MEMORY_LIMIT:-1g}
     logging: *logging
 
-  # The public page that re-hashes passwords of accounts imported from a 2.1
+  # The public website: downloads, leaderboards, profiles and account
+  # management. Logging in re-hashes passwords of accounts imported from a 2.1
   # server. Reads and writes the databases directly, so it sits on both
-  # networks like the panel, but never touches object storage.
-  migrate:
+  # networks like the panel; object storage and the game's icon sprites are
+  # mounted read-only.
+  web:
     <<: *hardened
-    image: ghcr.io/realistikgdps/poltergeist-migrate:${MIGRATE_TAG:-latest}
+    image: ghcr.io/realistikgdps/rgdps-web:${WEB_TAG:-latest}
     restart: unless-stopped
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     env_file:
       - configuration/app.env
       - configuration/mysql.env
+      - configuration/web.env
     environment:
       <<: *core-environment
-      MIGRATE_HTTP_PORT: 8502
-      MIGRATE_BASE_PATH: /migrate
+      APP_COMPONENT: web
+      APP_HTTP_PORT: 8001
+      APP_WORKERS: ${WEB_WORKERS:-2}
+      WEB_ASSETS_PATH: /data/assets
+    volumes:
+      - ${DATA_PATH:-./volumes}/storage:/data/storage:ro
+      - ${DATA_PATH:-./volumes}/assets:/data/assets:ro
     networks:
       - proxy
       - data
@@ -160,15 +168,21 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     deploy:
       resources:
         limits:
-          pids: 128
-          memory: ${MIGRATE_MEMORY_LIMIT:-512m}
+          pids: 256
+          memory: ${WEB_MEMORY_LIMIT:-1g}
     logging: *logging
 
-  # Runs every pending migration and exits. The app, panel and migrate page
-  # wait for it.
+  # Runs every pending migration and exits. The app, panel and website wait
+  # for it.
   # Built locally from migrations/ so the SQL files ship with this repository
   # rather than through a registry.
   migrations:

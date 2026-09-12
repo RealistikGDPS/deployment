@@ -9,7 +9,8 @@ setup:
 	@test -f configuration/app.env || cp configuration/app.env.example configuration/app.env
 	@test -f configuration/mysql.env || cp configuration/mysql.env.example configuration/mysql.env
 	@test -f configuration/mysql-root.env || cp configuration/mysql-root.env.example configuration/mysql-root.env
-	@mkdir -p "$$(sed -n 's/^DATA_PATH=//p' .env)/storage/songs"
+	@test -f configuration/web.env || cp configuration/web.env.example configuration/web.env
+	@mkdir -p "$$(sed -n 's/^DATA_PATH=//p' .env)/storage/songs" "$$(sed -n 's/^DATA_PATH=//p' .env)/assets"
 	@echo "Edit .env and configuration/*.env, then run: make deploy"
 
 config:
@@ -29,13 +30,13 @@ deploy:
 	$(COMPOSE) up -d --build --remove-orphans
 
 restart:
-	$(COMPOSE) restart app panel migrate
+	$(COMPOSE) restart app panel web
 
 ps:
 	$(COMPOSE) ps
 
 logs:
-	$(COMPOSE) logs -f --tail=200 app panel migrate nginx
+	$(COMPOSE) logs -f --tail=200 app panel web nginx
 
 migrate:
 	$(COMPOSE) run --rm --build migrations

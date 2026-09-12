@@ -31,13 +31,17 @@ services:
       - ../poltergeist-panel/panel:/app/panel:z
       - ${DATA_PATH:-./volumes}/storage:/data/storage:z
 
-  migrate:
+  web:
     <<: *dev-user
-    image: poltergeist-migrate:dev
+    image: rgdps-web:dev
     build:
-      context: ../poltergeist-migrate
+      context: ../rgdps-web
+    environment:
+      APP_DEV_MODE: "true"
     volumes:
-      - ../poltergeist-migrate/migrate:/app/migrate:z
+      - ../rgdps-web/web:/app/web:z
+      - ${DATA_PATH:-./volumes}/storage:/data/storage:z
+      - ${DATA_PATH:-./volumes}/assets:/data/assets:z
 
   migrations:
     <<: *dev-user

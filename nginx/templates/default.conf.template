@@ -1,6 +1,7 @@
-# Routes the public port: the control room lives under /panel, the account
-# migration page under /migrate, custom songs are served from object storage
-# under /songs, and the game server takes everything else.
+# Routes the public port: the control room lives under /panel, custom songs
+# are served from object storage under /songs, the game server takes
+# /database (and the patched game path) plus /api, and the website takes
+# everything else.
 #
 # Rendered by the nginx image's envsubst; ${NGINX_RESOLVER} and
 # ${NGINX_GAME_PATH} are replaced.
@@ -25,16 +26,17 @@ upstream panel {
     keepalive 8;
 }
 
-upstream migrate {
-    zone migrate 64k;
-    server migrate:8502 resolve;
-    keepalive 8;
+upstream web {
+    zone web 64k;
+    server web:8001 resolve;
+    keepalive 16;
 }
 
 # Flood caps keyed on the real client address. The application applies its
 # own per-endpoint limits; these only stop one address saturating a worker.
 limit_req_zone $binary_remote_addr zone=game:10m rate=30r/s;
 limit_req_zone $binary_remote_addr zone=admin:1m rate=5r/s;
+limit_req_zone $binary_remote_addr zone=site:10m rate=10r/s;
 limit_conn_zone $binary_remote_addr zone=perip:10m;
 limit_req_status 429;
 limit_conn_status 429;
@@ -73,20 +75,6 @@ server {
         return 302 /panel/;
     }
 
-    location /migrate/ {
-        proxy_pass http://migrate;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 3600s;
-        add_header X-Frame-Options SAMEORIGIN always;
-        add_header X-Content-Type-Options nosniff always;
-        add_header Referrer-Policy same-origin always;
-    }
-
-    location = /migrate {
-        return 302 /migrate/;
-    }
-
     # Custom songs are files in object storage under songs/<id>.mp3 and the
     # songs table points here. They never change under one id, so clients
     # and Cloudflare may cache them for as long as they like. Range requests
@@ -119,10 +107,31 @@ server {
         proxy_read_timeout 120s;
     }
 
-    location / {
-        limit_req zone=game burst=60 nodelay;
-        proxy_pass http://app;
+    # The website. Rendered icons carry their own immutable cache headers and
+    # are keyed entirely by their path, so Cloudflare may cache them forever;
+    # the stylesheet and script change with each release.
+    location /icons/ {
+        limit_req zone=site burst=100 nodelay;
+        proxy_pass http://web;
         proxy_set_header Connection "";
-        proxy_read_timeout 60s;
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    location /static/ {
+        limit_req zone=site burst=100 nodelay;
+        proxy_pass http://web;
+        proxy_set_header Connection "";
+        add_header Cache-Control "public, max-age=3600";
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    location / {
+        limit_req zone=site burst=30 nodelay;
+        proxy_pass http://web;
+        proxy_set_header Connection "";
+        proxy_read_timeout 30s;
+        add_header X-Frame-Options SAMEORIGIN always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy same-origin always;
     }
 }
