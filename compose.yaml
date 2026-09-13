@@ -1,10 +1,9 @@
-# Poltergeist production stack. The app, panel and web images come from GHCR;
-# only the migrations image is built here. `compose.dev.yaml` builds the rest
-# too.
+# Poltergeist production stack. The app and web images come from GHCR; only
+# the migrations image is built here. `compose.dev.yaml` builds the rest too.
 #
-# Only nginx publishes a port. The app, panel and website are reached through
-# it on the `proxy` network; MySQL and Redis sit on the `data` network, which
-# is internal and therefore has no route to the host or the internet.
+# Only nginx publishes a port. The app and website are reached through it on
+# the `proxy` network; MySQL and Redis sit on the `data` network, which is
+# internal and therefore has no route to the host or the internet.
 
 x-logging: &logging
   driver: json-file
@@ -21,8 +20,8 @@ x-core-environment: &core-environment
   REDIS_PORT: 6379
   REDIS_DATABASE: 0
   APP_STORAGE_PATH: /data/storage
-  # The images run without a passwd entry for APP_UID; uv and Streamlit want a
-  # writable home, which is the container's private tmpfs.
+  # The images run without a passwd entry for APP_UID; uv wants a writable
+  # home, which is the container's private tmpfs.
   HOME: /tmp
   UV_CACHE_DIR: /tmp/uv-cache
 
@@ -97,7 +96,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/v1/health/"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
       interval: 30s
       timeout: 5s
       start_period: 20s
@@ -109,40 +108,11 @@ services:
           memory: ${APP_MEMORY_LIMIT:-1g}
     logging: *logging
 
-  panel:
-    <<: *hardened
-    image: ghcr.io/realistikgdps/poltergeist-panel:${PANEL_TAG:-latest}
-    restart: unless-stopped
-    user: "${APP_UID:-1000}:${APP_GID:-1000}"
-    env_file:
-      - configuration/app.env
-      - configuration/mysql.env
-    environment:
-      <<: *core-environment
-      PANEL_HTTP_PORT: 8501
-      PANEL_BASE_PATH: /panel
-    volumes:
-      - ${DATA_PATH:-./volumes}/storage:/data/storage
-    networks:
-      - proxy
-      - data
-    depends_on:
-      migrations:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          pids: 256
-          memory: ${PANEL_MEMORY_LIMIT:-1g}
-    logging: *logging
-
-  # The public website: downloads, leaderboards, profiles and account
-  # management. Logging in re-hashes passwords of accounts imported from a 2.1
-  # server. Reads and writes the databases directly, so it sits on both
-  # networks like the panel; object storage and the game's icon sprites are
-  # mounted read-only.
+  # The public website and, under /admin, the control room. Logging in
+  # re-hashes passwords of accounts imported from a 2.1 server. Reads and
+  # writes the databases directly, so it sits on both networks; object storage
+  # and the game's icon sprites are mounted read-only. It probes the game
+  # server's internal health route for the status page.
   web:
     <<: *hardened
     image: ghcr.io/realistikgdps/rgdps-web:${WEB_TAG:-latest}
@@ -158,6 +128,7 @@ services:
       APP_HTTP_PORT: 8001
       APP_WORKERS: ${WEB_WORKERS:-2}
       WEB_ASSETS_PATH: /data/assets
+      WEB_GAME_SERVER_URL: http://app:8000
     volumes:
       - ${DATA_PATH:-./volumes}/storage:/data/storage:ro
       - ${DATA_PATH:-./volumes}/assets:/data/assets:ro
@@ -182,8 +153,7 @@ services:
           memory: ${WEB_MEMORY_LIMIT:-1g}
     logging: *logging
 
-  # Runs every pending migration and exits. The app, panel and website wait
-  # for it.
+  # Runs every pending migration and exits. The app and website wait for it.
   # Built locally from migrations/ so the SQL files ship with this repository
   # rather than through a registry.
   migrations:

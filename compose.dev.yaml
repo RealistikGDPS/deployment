@@ -22,15 +22,6 @@ services:
       - ../poltergeist/app:/app/app:z
       - ${DATA_PATH:-./volumes}/storage:/data/storage:z
 
-  panel:
-    <<: *dev-user
-    image: poltergeist-panel:dev
-    build:
-      context: ../poltergeist-panel
-    volumes:
-      - ../poltergeist-panel/panel:/app/panel:z
-      - ${DATA_PATH:-./volumes}/storage:/data/storage:z
-
   web:
     <<: *dev-user
     image: rgdps-web:dev
