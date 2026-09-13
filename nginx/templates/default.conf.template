@@ -31,6 +31,7 @@ upstream web {
 limit_req_zone $binary_remote_addr zone=game:10m rate=30r/s;
 limit_req_zone $binary_remote_addr zone=admin:1m rate=5r/s;
 limit_req_zone $binary_remote_addr zone=site:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=files:10m rate=5r/s;
 limit_conn_zone $binary_remote_addr zone=perip:10m;
 limit_req_status 429;
 limit_conn_status 429;
@@ -55,11 +56,21 @@ server {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
 
+    # Answers the container healthcheck only; loopback keeps its own address
+    # because real_ip trusts Cloudflare's ranges alone.
+    location = /nginx-health {
+        access_log off;
+        allow 127.0.0.1;
+        deny all;
+        return 200;
+    }
+
     # Custom songs are files in object storage under songs/<id>.mp3 and the
     # songs table points here. They never change under one id, so clients
     # and Cloudflare may cache them for as long as they like. Range requests
     # let the client resume a download.
     location /songs/ {
+        limit_req zone=files burst=20 nodelay;
         alias /srv/songs/;
         types { audio/mpeg mp3; }
         default_type application/octet-stream;
@@ -70,6 +81,7 @@ server {
     # Client builds the download page links to. Large, rarely changed and
     # named per version, so they may be cached for a day.
     location /files/ {
+        limit_req zone=files burst=20 nodelay;
         alias /srv/files/;
         types { application/zip zip; application/vnd.android.package-archive apk; }
         default_type application/octet-stream;

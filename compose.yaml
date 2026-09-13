@@ -26,16 +26,19 @@ x-core-environment: &core-environment
   UV_CACHE_DIR: /tmp/uv-cache
 
 # Applied to every container: no capabilities, no privilege escalation, an
-# immutable root filesystem with a private /tmp, and enough file descriptors
-# for a busy server (Docker's default of 1024 starves nginx and MySQL).
+# immutable root filesystem with a private /tmp that cannot hold executables,
+# a real init as PID 1 so signals and zombies are handled, and enough file
+# descriptors for a busy server (Docker's default of 1024 starves nginx and
+# MySQL).
 x-hardened: &hardened
   security_opt:
     - no-new-privileges:true
   cap_drop:
     - ALL
   read_only: true
+  init: true
   tmpfs:
-    - /tmp
+    - /tmp:noexec,nosuid,nodev
   ulimits:
     nofile:
       soft: 65536
@@ -44,7 +47,9 @@ x-hardened: &hardened
 services:
   nginx:
     <<: *hardened
-    image: nginxinc/nginx-unprivileged:alpine
+    # Pinned to a line, so a redeploy never jumps a major release unnoticed;
+    # bump deliberately. MySQL cannot downgrade a data directory.
+    image: nginxinc/nginx-unprivileged:1.31-alpine
     restart: unless-stopped
     ports:
       - "${HTTP_PORT:-80}:8080"
@@ -56,8 +61,8 @@ services:
       # Client bodies and proxy buffers; the rendered configuration. Both are
       # explicitly world-writable so the unprivileged nginx user can use them
       # on runtimes that copy the image's ownership onto the tmpfs.
-      - /tmp:size=${NGINX_TMP_SIZE:-128m},mode=1777
-      - /etc/nginx/conf.d:mode=1777
+      - /tmp:size=${NGINX_TMP_SIZE:-128m},mode=1777,noexec,nosuid,nodev
+      - /etc/nginx/conf.d:mode=1777,noexec,nosuid,nodev
     volumes:
       - ./nginx/templates:/etc/nginx/templates:ro
       - ./nginx/cloudflare.conf:/etc/nginx/cloudflare.conf:ro
@@ -65,6 +70,14 @@ services:
       - ${DATA_PATH:-./volumes}/files:/srv/files:ro
     networks:
       - proxy
+    # SIGQUIT drains in-flight requests; SIGTERM would drop them.
+    stop_signal: SIGQUIT
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/nginx-health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
     deploy:
       resources:
         limits:
@@ -95,6 +108,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    # Level uploads and saves in flight get half a minute to finish.
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
       interval: 30s
@@ -140,6 +155,7 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8001/health"]
       interval: 30s
@@ -173,11 +189,16 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          pids: 64
+          memory: 256m
     logging: *logging
 
   mysql:
     <<: *hardened
-    image: mysql:latest
+    image: mysql:26
     restart: unless-stopped
     # The entrypoint starts as root to take ownership of the data directory,
     # then drops to the mysql user; these are the capabilities that needs.
@@ -188,8 +209,8 @@ services:
       - SETGID
       - SETUID
     tmpfs:
-      - /tmp
-      - /var/run/mysqld
+      - /tmp:noexec,nosuid,nodev
+      - /var/run/mysqld:noexec,nosuid,nodev
     command:
       - --innodb-buffer-pool-size=${MYSQL_BUFFER_POOL_SIZE:-1G}
       - --max-connections=${MYSQL_MAX_CONNECTIONS:-150}
@@ -201,6 +222,8 @@ services:
       # Clients are addressed by IP on the internal network; never do reverse DNS.
       - --skip-name-resolve
       - --local-infile=OFF
+      # Nothing here reads or writes files through SQL.
+      - --secure-file-priv=NULL
       # SSD storage: bypass the page cache (the buffer pool already caches) and
       # let InnoDB flush at SSD rates rather than the spinning-disk default.
       - --innodb-flush-method=O_DIRECT
@@ -216,15 +239,20 @@ services:
     # Pings over TCP on purpose: the image's first-run initialisation runs a
     # temporary server that answers on the socket but has networking off, so
     # a socket ping would report healthy before the real server is up.
+    # The password travels in the environment rather than on the command
+    # line, where every process in the container could read it.
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u\"$$MYSQL_USER\" -p\"$$MYSQL_PASSWORD\" --silent"]
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u\"$$MYSQL_USER\" --silent"]
       interval: 10s
       timeout: 5s
       start_period: 30s
       retries: 10
+    # InnoDB needs time to flush; a hurried stop means crash recovery next start.
+    stop_grace_period: 1m
     deploy:
       resources:
         limits:
+          pids: 512
           memory: ${MYSQL_MEMORY_LIMIT:-2g}
     logging: *logging
 
@@ -232,7 +260,7 @@ services:
   # rebuilt, so an RDB snapshot is enough; no append-only log.
   redis:
     <<: *hardened
-    image: redis:alpine
+    image: redis:8-alpine
     restart: unless-stopped
     # As with MySQL: the entrypoint chowns /data and switches to the redis user.
     cap_add:
@@ -263,6 +291,8 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    # Time for the final RDB snapshot.
+    stop_grace_period: 30s
     deploy:
       resources:
         limits:
@@ -292,6 +322,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          pids: 64
+          memory: 512m
     logging: *logging
 
 networks:
