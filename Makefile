@@ -1,6 +1,11 @@
 COMPOSE ?= docker compose
 DEV := $(COMPOSE) -f compose.yaml -f compose.dev.yaml
 
+# The Discord relay is opt-in: its profile is only enabled when at least one
+# webhook is configured, so a stack without one never starts the container.
+DISCORD_CONFIGURED := $(shell grep -qsE '^DISCORD_WEBHOOK_[A-Z_]+=.+' configuration/discord.env && echo discord)
+export COMPOSE_PROFILES := $(DISCORD_CONFIGURED)
+
 .PHONY: setup config up down deploy restart ps logs migrate rebuild-leaderboards backup cloudflare-ips dev dev-down
 
 # First run on a fresh host: copies the example configuration into place.
@@ -10,6 +15,7 @@ setup:
 	@test -f configuration/mysql.env || cp configuration/mysql.env.example configuration/mysql.env
 	@test -f configuration/mysql-root.env || cp configuration/mysql-root.env.example configuration/mysql-root.env
 	@test -f configuration/web.env || cp configuration/web.env.example configuration/web.env
+	@test -f configuration/discord.env || cp configuration/discord.env.example configuration/discord.env
 	@mkdir -p "$$(sed -n 's/^DATA_PATH=//p' .env)/storage/songs" "$$(sed -n 's/^DATA_PATH=//p' .env)/assets" "$$(sed -n 's/^DATA_PATH=//p' .env)/files"
 	@echo "Edit .env and configuration/*.env, then run: make deploy"
 

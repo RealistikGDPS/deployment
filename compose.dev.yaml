@@ -34,6 +34,14 @@ services:
       - ${DATA_PATH:-./volumes}/storage:/data/storage:z
       - ${DATA_PATH:-./volumes}/assets:/data/assets:z
 
+  discord:
+    <<: *dev-user
+    image: poltergeist-discord:dev
+    build:
+      context: ../poltergeist-discord
+    volumes:
+      - ../poltergeist-discord/relay:/app/relay:z
+
   migrations:
     <<: *dev-user
 

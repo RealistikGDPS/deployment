@@ -7,6 +7,7 @@ Runs a Poltergeist server on one Linux host with Docker Compose.
 - **nginx** - the only container with a published port. Sends `/database` and `GAME_PATH` to the app (with `GAME_PATH` rewritten to the app's `/database`), `/songs` to object storage, `/files` to the client builds in `DATA_PATH/files`, and everything else, `/admin` included, to the website.
 - **app** - the game server, `ghcr.io/realistikgdps/poltergeist`.
 - **web** - the public website (downloads, leaderboards, profiles, accounts) and the admin area under `/admin`, `ghcr.io/realistikgdps/rgdps-web`. It needs the game's icon sprites in `DATA_PATH/assets`; see its README.
+- **discord** - optional: posts the events the app and website publish to Discord webhooks, `ghcr.io/realistikgdps/poltergeist-discord`. Only started when `configuration/discord.env` names at least one webhook.
 - **migrations** - applies the SQL in `migrations/` and exits. The app and website wait for it. Built locally.
 - **mysql** and **redis** - on an internal network with no access from outside the stack.
 
@@ -18,7 +19,7 @@ Cloudflare is expected in front, terminating TLS and connecting to `HTTP_PORT` o
 compose.yaml        the stack
 compose.dev.yaml    builds the app and website from the sibling checkouts
 .env.example        ports, image tags, paths, memory limits
-configuration/      app.env, mysql.env, mysql-root.env, web.env
+configuration/      app.env, mysql.env, mysql-root.env, web.env, discord.env
 nginx/              router template and Cloudflare IP ranges
 migrations/         migration image and SQL files
 scripts/            backup and Cloudflare range refresh
@@ -40,6 +41,11 @@ make deploy
 ```
 
 Grant the first administrator by hand (`INSERT INTO user_roles (user_id, role_id) VALUES (<id>, 5);`), log into the website with that account and open `/admin`. Download links, registration and the other live switches are set there.
+
+To announce events on Discord, put webhook URLs into `configuration/discord.env`
+(one variable per event kind, see the comments there) and run `make deploy`
+again; the relay container only exists while at least one is set. Clearing them
+all and running `make down` then `make deploy` removes it.
 
 ## Commands
 

@@ -169,6 +169,39 @@ services:
           memory: ${WEB_MEMORY_LIMIT:-1g}
     logging: *logging
 
+  # Posts Discord webhooks for the events the app and website publish on
+  # Redis. Opt-in: the Makefile enables the `discord` profile only when
+  # configuration/discord.env names at least one webhook. Needs the data
+  # network for Redis and the proxy network to reach Discord; no port.
+  discord:
+    <<: *hardened
+    image: ghcr.io/realistikgdps/poltergeist-discord:${DISCORD_TAG:-latest}
+    profiles: [discord]
+    restart: unless-stopped
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    env_file:
+      - configuration/app.env
+      - configuration/discord.env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DATABASE: 0
+      HOME: /tmp
+      UV_CACHE_DIR: /tmp/uv-cache
+      APP_COMPONENT: relay
+    networks:
+      - proxy
+      - data
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          pids: 64
+          memory: ${DISCORD_MEMORY_LIMIT:-128m}
+    logging: *logging
+
   # Runs every pending migration and exits. The app and website wait for it.
   # Built locally from migrations/ so the SQL files ship with this repository
   # rather than through a registry.
