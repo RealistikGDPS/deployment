@@ -124,8 +124,10 @@ server {
     # The control room: the site's headers and a tighter flood cap. No
     # captcha lives here, so scripts and frames come from the site alone; the
     # status page fetches its own JSON, which connect-src 'self' permits. The
-    # longer read timeout covers a leaderboard rebuild.
-    location /admin/ {
+    # longer read timeout covers a leaderboard rebuild. A regex location, so
+    # nginx does not answer the bare /admin with a slash redirect that the
+    # application would then undo.
+    location ~ ^/admin(?:/|$) {
         limit_req zone=admin burst=10 nodelay;
         client_max_body_size 16k;
         proxy_pass http://web;
