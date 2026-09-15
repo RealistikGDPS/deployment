@@ -32,10 +32,12 @@ down:
 
 # Pull the tags pinned in .env, build the migrations image and roll the stack.
 # Migrations run before the app and website come up; a failed migration
-# leaves the old containers stopped.
+# leaves the old containers stopped. The Redis rankings are rebuilt afterwards
+# so a migration that rewrites the counters is reflected at once.
 deploy:
 	$(COMPOSE) pull --ignore-buildable
 	$(COMPOSE) up -d --build --remove-orphans
+	$(COMPOSE) run --rm rebuild-leaderboards
 
 restart:
 	$(COMPOSE) restart app web

@@ -69,7 +69,7 @@ running `make down` then `make deploy` returns to direct egress.
 ## Commands
 
 ```
-make deploy               pull images, build migrations, start or update the stack
+make deploy               pull images, build migrations, start or update the stack, rebuild the rankings
 make ps                   container status
 make logs                 follow app, web and nginx logs
 make migrate              run pending migrations by hand
