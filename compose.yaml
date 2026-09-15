@@ -20,6 +20,9 @@ x-core-environment: &core-environment
   REDIS_PORT: 6379
   REDIS_DATABASE: 0
   APP_STORAGE_PATH: /data/storage
+  # Set by the Makefile to the warp service when configuration/warp.json
+  # exists; empty means the official servers are reached directly.
+  BOOMLINGS_PROXY_URL: ${BOOMLINGS_PROXY_URL:-}
   # The images run without a passwd entry for APP_UID; uv wants a writable
   # home, which is the container's private tmpfs.
   HOME: /tmp
@@ -202,6 +205,40 @@ services:
           memory: ${DISCORD_MEMORY_LIMIT:-128m}
     logging: *logging
 
+  # Cloudflare WARP as an HTTP proxy for the official servers, which refuse
+  # some hosting providers outright. Opt-in: the Makefile enables the `warp`
+  # profile and points BOOMLINGS_PROXY_URL at this service only when
+  # configuration/warp.json (an identity registered with `usque register`)
+  # exists. Built locally from warp/; only the proxy network, for egress, and
+  # no port. The app and website tolerate its absence.
+  warp:
+    <<: *hardened
+    image: poltergeist-warp
+    build:
+      context: ./warp
+    profiles: [warp]
+    restart: unless-stopped
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    command: ["http-proxy", "-c", "/config/warp.json", "-b", "0.0.0.0", "-p", "8000"]
+    volumes:
+      - ./configuration/warp.json:/config/warp.json:ro
+    networks:
+      - proxy
+    healthcheck:
+      # Through the tunnel to Cloudflare itself, never to the official servers,
+      # whose rate limit is shared with every other WARP user on the address.
+      test: ["CMD-SHELL", "http_proxy=http://127.0.0.1:8000 wget -qO /dev/null http://1.1.1.1/cdn-cgi/trace"]
+      interval: 60s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          pids: 64
+          memory: ${WARP_MEMORY_LIMIT:-128m}
+    logging: *logging
+
   # Runs every pending migration and exits. The app and website wait for it.
   # Built locally from migrations/ so the SQL files ship with this repository
   # rather than through a registry.
@@ -363,8 +400,9 @@ services:
     logging: *logging
 
 networks:
-  # nginx and its two upstreams. Not internal: the app fetches song metadata
-  # from the official servers, and published ports need external connectivity.
+  # nginx and its two upstreams. Not internal: the app (or the warp proxy on
+  # its behalf) fetches song metadata from the official servers, and published
+  # ports need external connectivity.
   proxy:
   # Database and cache. Internal: unreachable from the host and the internet.
   data:

@@ -1,10 +1,12 @@
 COMPOSE ?= docker compose
 DEV := $(COMPOSE) -f compose.yaml -f compose.dev.yaml
 
-# The Discord relay is opt-in: its profile is only enabled when at least one
-# webhook is configured, so a stack without one never starts the container.
-DISCORD_CONFIGURED := $(shell grep -qsE '^DISCORD_WEBHOOK_[A-Z_]+=.+' configuration/discord.env && echo discord)
-export COMPOSE_PROFILES := $(DISCORD_CONFIGURED)
+# The optional containers are enabled by their configuration alone: the
+# Discord relay when at least one webhook is set, the WARP egress proxy when a
+# registered identity is in place. A stack without them never starts them.
+export COMPOSE_PROFILES := $(shell { grep -qsE '^DISCORD_WEBHOOK_[A-Z_]+=.+' configuration/discord.env && echo discord; test -s configuration/warp.json && echo warp; } | paste -sd,)
+# The app and website reach the official servers through the proxy when it runs.
+export BOOMLINGS_PROXY_URL := $(if $(findstring warp,$(COMPOSE_PROFILES)),http://warp:8000,)
 
 .PHONY: setup config up down deploy restart ps logs migrate rebuild-leaderboards backup cloudflare-ips dev dev-down
 

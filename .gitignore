@@ -1,4 +1,5 @@
 .env
 configuration/*.env
+configuration/warp.json
 volumes/
 backups/

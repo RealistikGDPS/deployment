@@ -8,6 +8,7 @@ Runs a Poltergeist server on one Linux host with Docker Compose.
 - **app** - the game server, `ghcr.io/realistikgdps/poltergeist`.
 - **web** - the public website (downloads, leaderboards, profiles, accounts) and the admin area under `/admin`, `ghcr.io/realistikgdps/rgdps-web`. It needs the game's icon sprites in `DATA_PATH/assets`; see its README.
 - **discord** - optional: posts the events the app and website publish to Discord webhooks, `ghcr.io/realistikgdps/poltergeist-discord`. Only started when `configuration/discord.env` names at least one webhook.
+- **warp** - optional: Cloudflare WARP as an HTTP proxy for the official servers, for hosts whose provider they refuse. Built locally; only started when `configuration/warp.json` exists.
 - **migrations** - applies the SQL in `migrations/` and exits. The app and website wait for it. Built locally.
 - **mysql** and **redis** - on an internal network with no access from outside the stack.
 
@@ -19,9 +20,10 @@ Cloudflare is expected in front, terminating TLS and connecting to `HTTP_PORT` o
 compose.yaml        the stack
 compose.dev.yaml    builds the app and website from the sibling checkouts
 .env.example        ports, image tags, paths, memory limits
-configuration/      app.env, mysql.env, mysql-root.env, web.env, discord.env
+configuration/      app.env, mysql.env, mysql-root.env, web.env, discord.env, warp.json
 nginx/              router template and Cloudflare IP ranges
 migrations/         migration image and SQL files
+warp/               egress proxy image
 scripts/            backup and Cloudflare range refresh
 systemd/            nightly backup timer
 ```
@@ -46,6 +48,23 @@ To announce events on Discord, put webhook URLs into `configuration/discord.env`
 (one variable per event kind, see the comments there) and run `make deploy`
 again; the relay container only exists while at least one is set. Clearing them
 all and running `make down` then `make deploy` removes it.
+
+## Official servers
+
+The app fetches Newgrounds song metadata from the official servers, which
+refuse whole hosting providers (Cloudflare error 1005). If the Boomlings probe
+on the admin status page reports them down from your host, route those requests
+through Cloudflare WARP: on any machine run `usque register -a -n poltergeist`
+([usque](https://github.com/Diniboy1123/usque), a userspace WARP client), copy
+the resulting `config.json` to `configuration/warp.json` with mode 600 and run
+`make deploy` again. The `warp` container is built locally, only the app and
+website use it, and while it is down they answer as if the song did not exist.
+
+The egress address is shared with other WARP users and the official servers
+rate limit it, so after a refusal lookups pause for a minute; this suits
+on-demand traffic, not crawling. WARP is a consumer service reached through an
+unofficial client and can stop working without notice. Removing the file and
+running `make down` then `make deploy` returns to direct egress.
 
 ## Commands
 

@@ -42,6 +42,9 @@ services:
     volumes:
       - ../poltergeist-discord/relay:/app/relay:z
 
+  warp:
+    <<: *dev-user
+
   migrations:
     <<: *dev-user
 
