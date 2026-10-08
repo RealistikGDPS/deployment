@@ -148,7 +148,8 @@ services:
       WEB_ASSETS_PATH: /data/assets
       WEB_GAME_SERVER_URL: http://app:8000
     volumes:
-      # The level reupload tool writes level data, so storage is not read-only.
+      # The reupload and song upload tools write level data and MP3s, so
+      # storage is not read-only.
       - ${DATA_PATH:-./volumes}/storage:/data/storage
       - ${DATA_PATH:-./volumes}/assets:/data/assets:ro
     networks:
