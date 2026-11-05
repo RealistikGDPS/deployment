@@ -33,6 +33,7 @@ limit_req_zone $binary_remote_addr zone=admin:1m rate=5r/s;
 limit_req_zone $binary_remote_addr zone=site:10m rate=10r/s;
 limit_req_zone $binary_remote_addr zone=tools:1m rate=1r/s;
 limit_req_zone $binary_remote_addr zone=files:10m rate=5r/s;
+limit_req_zone $binary_remote_addr zone=cards:1m rate=2r/s;
 limit_conn_zone $binary_remote_addr zone=perip:10m;
 limit_req_status 429;
 limit_conn_status 429;
@@ -144,7 +145,8 @@ server {
     # The site's forms are a few hundred bytes; anything larger is not a form.
     # Scripts and frames are limited to the site itself and the Turnstile
     # challenge; styles allow inline values because chart bars are sized in
-    # markup.
+    # markup. Song pages play audio straight from Newgrounds and the other
+    # hosts the songs table points at, hence media-src https:.
     # The song upload carries an MP3; the application refuses anything over
     # APP_SONG_MAX_BYTES, so this cap only needs to sit above it. Same rate
     # zone and headers as the other tools.
@@ -177,6 +179,28 @@ server {
         add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" always;
     }
 
+    # Share cards are drawn on demand, which costs real CPU per new image, so
+    # one address gets a trickle. Embedding services fetch each one once.
+    location /cards/ {
+        limit_req zone=cards burst=10 nodelay;
+        proxy_pass http://web;
+        proxy_set_header Connection "";
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    # The live feed is one long-lived event stream per open page. Unbuffered
+    # so each event leaves at once; the application sends a comment every
+    # 20 seconds, so a quiet minute is a dead connection.
+    location = /live/feed {
+        limit_req zone=site burst=30 nodelay;
+        proxy_pass http://web;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 60s;
+        add_header X-Content-Type-Options nosniff always;
+    }
+
     location / {
         limit_req zone=site burst=30 nodelay;
         client_max_body_size 16k;
@@ -187,6 +211,6 @@ server {
         add_header X-Content-Type-Options nosniff always;
         add_header Referrer-Policy same-origin always;
         add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self' https:; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" always;
     }
 }
